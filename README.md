@@ -34,7 +34,7 @@ Developers using AI coding tools and platform CLIs need to re-authenticate in ev
 | `codex` | OpenAI Codex CLI | `~/.codex/` (`auth.json`, `config.toml`) |
 | `gemini` | Gemini CLI | `~/.gemini/` (`.env`, `oauth_creds.json`) |
 | `opencode` | Opencode | `~/.local/share/opencode/`, `~/.config/opencode/` |
-| `qwen-coder` | Qwen Code | `~/.qwen/` (`credentials.json`, `settings.json`) |
+| `qwen-coder` | Qwen Code | `~/.qwen/` (`oauth_creds.json`, `settings.json`) |
 
 ## Quick Start
 
