@@ -1,11 +1,12 @@
-//! Qwen Coder auth provider.
+//! Qwen Code auth provider.
 
 use crate::{AuthProvider, CredentialFile, ValidationResult};
 use std::path::PathBuf;
 
-/// Provider for Qwen Coder CLI credentials.
+/// Provider for Qwen Code CLI credentials (officially "Qwen Code", npm: `qwen-code`).
 ///
-/// Qwen Coder stores config in `~/.qwen-coder/` or `~/.config/qwen-coder/`.
+/// Qwen Code stores config in `~/.qwen/`.
+/// Key files: `credentials.json` (OAuth tokens), `settings.json` (API keys/settings).
 #[derive(Debug, Clone, Default)]
 pub struct QwenCoderProvider;
 
@@ -16,29 +17,22 @@ impl AuthProvider for QwenCoderProvider {
     }
 
     fn display_name(&self) -> &str {
-        "Qwen Coder"
+        "Qwen Code"
     }
 
     fn credential_files(&self) -> Vec<CredentialFile> {
         let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("~"));
-        let config_dir = dirs::config_dir().unwrap_or_else(|| home.join(".config"));
-        vec![
-            CredentialFile {
-                relative_path: "qwen-coder/dot-qwen-coder".to_string(),
-                local_path: home.join(".qwen-coder"),
-                is_dir: true,
-            },
-            CredentialFile {
-                relative_path: "qwen-coder/config-qwen-coder".to_string(),
-                local_path: config_dir.join("qwen-coder"),
-                is_dir: true,
-            },
-        ]
+        vec![CredentialFile {
+            relative_path: "qwen-coder/dot-qwen".to_string(),
+            local_path: home.join(".qwen"),
+            is_dir: true,
+        }]
     }
 
     async fn validate(&self) -> ValidationResult {
         let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("~"));
-        if home.join(".qwen-coder").exists() {
+        let qwen_dir = home.join(".qwen");
+        if qwen_dir.join("credentials.json").exists() || qwen_dir.join("settings.json").exists() {
             ValidationResult::Valid
         } else {
             ValidationResult::Missing

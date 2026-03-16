@@ -5,7 +5,8 @@ use std::path::PathBuf;
 
 /// Provider for OpenAI Codex CLI credentials.
 ///
-/// Codex CLI stores auth config in `~/.codex/` (or `~/.config/codex/` on some setups).
+/// Codex CLI stores auth in `~/.codex/` (controlled by `CODEX_HOME` env var).
+/// Key files: `auth.json` (tokens), `config.toml` (settings).
 #[derive(Debug, Clone, Default)]
 pub struct CodexProvider;
 
@@ -20,25 +21,29 @@ impl AuthProvider for CodexProvider {
     }
 
     fn credential_files(&self) -> Vec<CredentialFile> {
-        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("~"));
-        let config_dir = dirs::config_dir().unwrap_or_else(|| home.join(".config"));
-        vec![
-            CredentialFile {
-                relative_path: "codex/dot-codex".to_string(),
-                local_path: home.join(".codex"),
-                is_dir: true,
-            },
-            CredentialFile {
-                relative_path: "codex/config-codex".to_string(),
-                local_path: config_dir.join("codex"),
-                is_dir: true,
-            },
-        ]
+        let codex_home = std::env::var("CODEX_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| {
+                dirs::home_dir()
+                    .unwrap_or_else(|| PathBuf::from("~"))
+                    .join(".codex")
+            });
+        vec![CredentialFile {
+            relative_path: "codex/dot-codex".to_string(),
+            local_path: codex_home,
+            is_dir: true,
+        }]
     }
 
     async fn validate(&self) -> ValidationResult {
-        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("~"));
-        if home.join(".codex").exists() {
+        let codex_home = std::env::var("CODEX_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| {
+                dirs::home_dir()
+                    .unwrap_or_else(|| PathBuf::from("~"))
+                    .join(".codex")
+            });
+        if codex_home.join("auth.json").exists() {
             ValidationResult::Valid
         } else {
             ValidationResult::Missing

@@ -5,7 +5,8 @@ use std::path::PathBuf;
 
 /// Provider for opencode credentials.
 ///
-/// Opencode stores config in `~/.opencode/` or `~/.config/opencode/`.
+/// Opencode stores auth in `~/.local/share/opencode/auth.json` (XDG data dir)
+/// and config/plugins in `~/.config/opencode/`.
 #[derive(Debug, Clone, Default)]
 pub struct OpencodeProvider;
 
@@ -20,25 +21,43 @@ impl AuthProvider for OpencodeProvider {
     }
 
     fn credential_files(&self) -> Vec<CredentialFile> {
-        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("~"));
-        let config_dir = dirs::config_dir().unwrap_or_else(|| home.join(".config"));
+        let data_dir = dirs::data_local_dir()
+            .unwrap_or_else(|| {
+                dirs::home_dir()
+                    .unwrap_or_else(|| PathBuf::from("~"))
+                    .join(".local/share")
+            })
+            .join("opencode");
+        let config_dir = dirs::config_dir()
+            .unwrap_or_else(|| {
+                dirs::home_dir()
+                    .unwrap_or_else(|| PathBuf::from("~"))
+                    .join(".config")
+            })
+            .join("opencode");
         vec![
             CredentialFile {
-                relative_path: "opencode/dot-opencode".to_string(),
-                local_path: home.join(".opencode"),
+                relative_path: "opencode/data".to_string(),
+                local_path: data_dir,
                 is_dir: true,
             },
             CredentialFile {
-                relative_path: "opencode/config-opencode".to_string(),
-                local_path: config_dir.join("opencode"),
+                relative_path: "opencode/config".to_string(),
+                local_path: config_dir,
                 is_dir: true,
             },
         ]
     }
 
     async fn validate(&self) -> ValidationResult {
-        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("~"));
-        if home.join(".opencode").exists() {
+        let data_dir = dirs::data_local_dir()
+            .unwrap_or_else(|| {
+                dirs::home_dir()
+                    .unwrap_or_else(|| PathBuf::from("~"))
+                    .join(".local/share")
+            })
+            .join("opencode");
+        if data_dir.join("auth.json").exists() {
             ValidationResult::Valid
         } else {
             ValidationResult::Missing

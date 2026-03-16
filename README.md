@@ -31,10 +31,10 @@ Developers using AI coding tools and platform CLIs need to re-authenticate in ev
 | `gh` | GitHub CLI | `~/.config/gh/` |
 | `glab` | GitLab CLI | `~/.config/glab-cli/` |
 | `claude` | Claude Code | `~/.claude/`, `~/.claude.json` |
-| `codex` | OpenAI Codex CLI | `~/.codex/`, `~/.config/codex/` |
-| `gemini` | Gemini CLI | `~/.gemini/`, `~/.config/gemini/` |
-| `opencode` | Opencode | `~/.opencode/`, `~/.config/opencode/` |
-| `qwen-coder` | Qwen Coder | `~/.qwen-coder/`, `~/.config/qwen-coder/` |
+| `codex` | OpenAI Codex CLI | `~/.codex/` (`auth.json`, `config.toml`) |
+| `gemini` | Gemini CLI | `~/.gemini/` (`.env`, `oauth_creds.json`) |
+| `opencode` | Opencode | `~/.local/share/opencode/`, `~/.config/opencode/` |
+| `qwen-coder` | Qwen Code | `~/.qwen/` (`credentials.json`, `settings.json`) |
 
 ## Quick Start
 
