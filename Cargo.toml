@@ -1,6 +1,6 @@
 [package]
 name = "sync-auth"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "Bidirectional auth credential sync for dev tools (Claude Code, GitHub CLI, GitLab CLI, Codex, Gemini CLI, and more) via Git repositories"
 readme = "README.md"
