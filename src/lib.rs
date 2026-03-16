@@ -1,136 +1,92 @@
-//! Example module entry point.
+//! `sync-auth` — Bidirectional auth credential sync for dev tools via Git repositories.
 //!
-//! Replace this with your actual implementation.
+//! This library provides a trait-based, extensible system for syncing authentication
+//! credentials for developer tools (GitHub CLI, GitLab CLI, Claude Code, Codex,
+//! Gemini CLI, etc.) through a Git repository backend.
+//!
+//! # Architecture
+//!
+//! - [`AuthProvider`] trait: implement to add support for any dev tool's credentials
+//! - [`GitBackend`] trait: implement to customize how credentials are stored/fetched
+//! - [`SyncEngine`]: orchestrates bidirectional sync between local and remote
+//! - Built-in providers for common tools via [`providers`] module
+//!
+//! # Example
+//!
+//! ```no_run
+//! use sync_auth::{SyncEngine, SyncConfig};
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     let config = SyncConfig {
+//!         repo_url: "https://github.com/user/my-credentials.git".to_string(),
+//!         local_path: "/tmp/sync-auth-repo".into(),
+//!         providers: vec!["gh".to_string(), "claude".to_string()],
+//!         ..Default::default()
+//!     };
+//!     let engine = SyncEngine::new(config)?;
+//!     engine.pull().await?;
+//!     Ok(())
+//! }
+//! ```
+
+pub mod backend;
+pub mod providers;
+
+mod config;
+mod engine;
+mod error;
+
+pub use config::SyncConfig;
+pub use engine::SyncEngine;
+pub use error::SyncError;
 
 /// Package version (matches Cargo.toml version).
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Adds two numbers together.
-///
-/// # Arguments
-///
-/// * `a` - First number
-/// * `b` - Second number
-///
-/// # Returns
-///
-/// Sum of `a` and `b`
-///
-/// # Examples
-///
-/// ```
-/// use my_package::add;
-/// assert_eq!(add(2, 3), 5);
-/// ```
-#[must_use]
-pub const fn add(a: i64, b: i64) -> i64 {
-    a + b
+/// Credential file entry describing a single file to sync.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CredentialFile {
+    /// Relative path within the provider's namespace in the sync repo.
+    pub relative_path: String,
+    /// Absolute path on the local filesystem.
+    pub local_path: std::path::PathBuf,
+    /// Whether this is a directory (recursive sync).
+    pub is_dir: bool,
 }
 
-/// Multiplies two numbers together.
-///
-/// # Arguments
-///
-/// * `a` - First number
-/// * `b` - Second number
-///
-/// # Returns
-///
-/// Product of `a` and `b`
-///
-/// # Examples
-///
-/// ```
-/// use my_package::multiply;
-/// assert_eq!(multiply(2, 3), 6);
-/// ```
-#[must_use]
-pub const fn multiply(a: i64, b: i64) -> i64 {
-    a * b
+/// Result of validating a credential.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ValidationResult {
+    /// Credential is valid and usable.
+    Valid,
+    /// Credential exists but is expired or invalid.
+    Expired,
+    /// Credential is missing or empty.
+    Missing,
+    /// Validation could not be performed (tool not installed, etc.).
+    Unknown,
 }
 
-/// Async delay function.
+/// Trait for auth credential providers.
 ///
-/// # Arguments
-///
-/// * `seconds` - Duration to wait in seconds
-///
-/// # Examples
-///
-/// ```
-/// use my_package::delay;
-///
-/// #[tokio::main]
-/// async fn main() {
-///     delay(0.1).await;
-/// }
-/// ```
-pub async fn delay(seconds: f64) {
-    let duration = std::time::Duration::from_secs_f64(seconds);
-    tokio::time::sleep(duration).await;
-}
+/// Implement this trait to add support for syncing credentials of any dev tool.
+/// Each provider declares its name, the credential files it manages, and
+/// optionally a validation method to check credential freshness.
+#[async_trait::async_trait]
+pub trait AuthProvider: Send + Sync {
+    /// Unique name for this provider (e.g. "gh", "claude").
+    fn name(&self) -> &str;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+    /// Human-readable display name.
+    fn display_name(&self) -> &str;
 
-    mod add_tests {
-        use super::*;
+    /// List of credential files/directories this provider manages.
+    fn credential_files(&self) -> Vec<CredentialFile>;
 
-        #[test]
-        fn test_add_positive_numbers() {
-            assert_eq!(add(2, 3), 5);
-        }
-
-        #[test]
-        fn test_add_negative_numbers() {
-            assert_eq!(add(-1, -2), -3);
-        }
-
-        #[test]
-        fn test_add_zero() {
-            assert_eq!(add(5, 0), 5);
-        }
-
-        #[test]
-        fn test_add_large_numbers() {
-            assert_eq!(add(1_000_000, 2_000_000), 3_000_000);
-        }
-    }
-
-    mod multiply_tests {
-        use super::*;
-
-        #[test]
-        fn test_multiply_positive_numbers() {
-            assert_eq!(multiply(2, 3), 6);
-        }
-
-        #[test]
-        fn test_multiply_by_zero() {
-            assert_eq!(multiply(5, 0), 0);
-        }
-
-        #[test]
-        fn test_multiply_negative_numbers() {
-            assert_eq!(multiply(-2, 3), -6);
-        }
-
-        #[test]
-        fn test_multiply_two_negatives() {
-            assert_eq!(multiply(-2, -3), 6);
-        }
-    }
-
-    mod delay_tests {
-        use super::*;
-
-        #[tokio::test]
-        async fn test_delay() {
-            let start = std::time::Instant::now();
-            delay(0.1).await;
-            let elapsed = start.elapsed();
-            assert!(elapsed.as_secs_f64() >= 0.1);
-        }
+    /// Validate whether the current local credentials are still valid.
+    /// Defaults to [`ValidationResult::Unknown`].
+    async fn validate(&self) -> ValidationResult {
+        ValidationResult::Unknown
     }
 }
