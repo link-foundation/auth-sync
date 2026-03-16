@@ -1,79 +1,10 @@
-//! Integration tests for my-package.
-//!
-//! These tests verify the public API works correctly.
+//! Integration tests for sync-auth.
 
-use my_package::{add, delay, multiply};
-
-mod add_integration_tests {
-    use super::*;
-
-    #[test]
-    fn test_add_returns_correct_sum() {
-        assert_eq!(add(10, 20), 30);
-    }
-
-    #[test]
-    fn test_add_handles_large_numbers() {
-        assert_eq!(add(1_000_000_000, 2_000_000_000), 3_000_000_000);
-    }
-
-    #[test]
-    fn test_add_handles_negative_result() {
-        assert_eq!(add(-100, 50), -50);
-    }
-}
-
-mod multiply_integration_tests {
-    use super::*;
-
-    #[test]
-    fn test_multiply_returns_correct_product() {
-        assert_eq!(multiply(10, 20), 200);
-    }
-
-    #[test]
-    fn test_multiply_handles_large_numbers() {
-        assert_eq!(multiply(1_000, 1_000_000), 1_000_000_000);
-    }
-
-    #[test]
-    fn test_multiply_handles_negative_numbers() {
-        assert_eq!(multiply(-10, -20), 200);
-    }
-}
-
-mod delay_integration_tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_delay_waits_minimum_time() {
-        let start = std::time::Instant::now();
-        delay(0.05).await;
-        let elapsed = start.elapsed();
-
-        assert!(
-            elapsed.as_secs_f64() >= 0.05,
-            "Delay should wait at least 0.05 seconds, but waited {:.4}s",
-            elapsed.as_secs_f64()
-        );
-    }
-
-    #[tokio::test]
-    async fn test_delay_zero_completes_quickly() {
-        let start = std::time::Instant::now();
-        delay(0.0).await;
-        let elapsed = start.elapsed();
-
-        assert!(
-            elapsed.as_secs_f64() < 0.1,
-            "Zero delay should complete quickly, but took {:.4}s",
-            elapsed.as_secs_f64()
-        );
-    }
-}
+use sync_auth::providers;
+use sync_auth::{SyncConfig, SyncEngine, ValidationResult, VERSION};
 
 mod version_tests {
-    use my_package::VERSION;
+    use super::*;
 
     #[test]
     fn test_version_is_not_empty() {
@@ -82,7 +13,137 @@ mod version_tests {
 
     #[test]
     fn test_version_matches_cargo_toml() {
-        // Version should match the one in Cargo.toml
         assert!(VERSION.starts_with("0."));
+    }
+}
+
+mod provider_tests {
+    use super::*;
+
+    #[test]
+    fn test_all_providers_returns_seven() {
+        let all = providers::all_providers();
+        assert_eq!(all.len(), 7);
+    }
+
+    #[test]
+    fn test_provider_by_name_known() {
+        assert!(providers::provider_by_name("gh").is_some());
+        assert!(providers::provider_by_name("claude").is_some());
+        assert!(providers::provider_by_name("glab").is_some());
+        assert!(providers::provider_by_name("codex").is_some());
+        assert!(providers::provider_by_name("gemini").is_some());
+        assert!(providers::provider_by_name("opencode").is_some());
+        assert!(providers::provider_by_name("qwen-coder").is_some());
+    }
+
+    #[test]
+    fn test_provider_by_name_unknown() {
+        assert!(providers::provider_by_name("unknown-tool").is_none());
+    }
+
+    #[test]
+    fn test_provider_has_credential_files() {
+        for provider in providers::all_providers() {
+            let files = provider.credential_files();
+            assert!(
+                !files.is_empty(),
+                "provider {} should have at least one credential file",
+                provider.name()
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_validate_returns_valid_result() {
+        // On a CI machine, most tools won't be installed, so Unknown/Missing is fine
+        let gh = providers::provider_by_name("gh").unwrap();
+        let result = gh.validate().await;
+        assert!(matches!(
+            result,
+            ValidationResult::Valid
+                | ValidationResult::Expired
+                | ValidationResult::Missing
+                | ValidationResult::Unknown
+        ));
+    }
+}
+
+mod engine_tests {
+    use super::*;
+
+    #[test]
+    fn test_engine_requires_repo_url() {
+        let config = SyncConfig::default();
+        assert!(SyncEngine::new(config).is_err());
+    }
+
+    #[test]
+    fn test_engine_creates_with_valid_config() {
+        let config = SyncConfig {
+            repo_url: "https://github.com/example/creds.git".to_string(),
+            ..Default::default()
+        };
+        assert!(SyncEngine::new(config).is_ok());
+    }
+
+    #[test]
+    fn test_engine_with_specific_providers() {
+        let config = SyncConfig {
+            repo_url: "https://github.com/example/creds.git".to_string(),
+            providers: vec!["gh".to_string(), "claude".to_string()],
+            ..Default::default()
+        };
+        let engine = SyncEngine::new(config).unwrap();
+        assert_eq!(engine.providers.len(), 2);
+    }
+
+    #[test]
+    fn test_engine_with_unknown_provider_fails() {
+        let config = SyncConfig {
+            repo_url: "https://github.com/example/creds.git".to_string(),
+            providers: vec!["nonexistent".to_string()],
+            ..Default::default()
+        };
+        assert!(SyncEngine::new(config).is_err());
+    }
+}
+
+mod config_tests {
+    use super::*;
+
+    #[test]
+    fn test_default_config() {
+        let config = SyncConfig::default();
+        assert!(config.repo_url.is_empty());
+        assert!(config.shallow_clone);
+        assert_eq!(config.branch, "main");
+        assert_eq!(config.watch_interval_secs, 60);
+    }
+
+    #[test]
+    fn test_config_load_nonexistent_file() {
+        let result = SyncConfig::load_from_file(std::path::Path::new("/nonexistent/config.toml"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_config_load_valid_toml() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(
+            tmp.path(),
+            r#"
+repo_url = "https://github.com/test/repo.git"
+branch = "develop"
+shallow_clone = false
+watch_interval_secs = 120
+"#,
+        )
+        .unwrap();
+        let config = SyncConfig::load_from_file(tmp.path()).unwrap();
+        assert_eq!(config.repo_url, "https://github.com/test/repo.git");
+        assert_eq!(config.branch, "develop");
+        assert!(!config.shallow_clone);
+        assert_eq!(config.watch_interval_secs, 120);
     }
 }

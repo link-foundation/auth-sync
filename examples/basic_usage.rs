@@ -1,34 +1,62 @@
-//! Basic usage example for my-package.
+//! Basic usage example for sync-auth.
 //!
-//! This example demonstrates the basic functionality of the package.
+//! This example shows how to use the sync-auth library programmatically.
 //!
 //! Run with: `cargo run --example basic_usage`
 
-use my_package::{add, delay, multiply};
+use sync_auth::providers;
+use sync_auth::{SyncConfig, SyncEngine};
 
 #[tokio::main]
 async fn main() {
-    // Example 1: Basic arithmetic
-    println!("Example 1: Basic arithmetic");
-    println!("2 + 3 = {}", add(2, 3));
-    println!("2 * 3 = {}", multiply(2, 3));
+    // List available providers
+    println!("Available auth providers:");
+    for provider in providers::all_providers() {
+        println!("  {:<15} {}", provider.name(), provider.display_name());
+        for cred in provider.credential_files() {
+            let exists = if cred.local_path.exists() {
+                "exists"
+            } else {
+                "not found"
+            };
+            println!(
+                "    {} -> {} ({})",
+                cred.relative_path,
+                cred.local_path.display(),
+                exists
+            );
+        }
+    }
     println!();
 
-    // Example 2: Working with larger numbers
-    println!("Example 2: Working with larger numbers");
-    println!("1000 + 2000 = {}", add(1000, 2000));
-    println!("100 * 200 = {}", multiply(100, 200));
-    println!();
+    // Create a sync config (replace with your actual repo URL)
+    let config = SyncConfig {
+        repo_url: "https://github.com/YOUR_USER/YOUR_CREDENTIALS_REPO.git".to_string(),
+        providers: vec!["gh".to_string(), "claude".to_string()],
+        ..Default::default()
+    };
 
-    // Example 3: Working with negative numbers
-    println!("Example 3: Working with negative numbers");
-    println!("-5 + 10 = {}", add(-5, 10));
-    println!("-3 * 4 = {}", multiply(-3, 4));
-    println!();
+    println!("Config:");
+    println!("  repo:    {}", config.repo_url);
+    println!("  path:    {}", config.local_path.display());
+    println!("  branch:  {}", config.branch);
+    println!("  shallow: {}", config.shallow_clone);
 
-    // Example 4: Async delay
-    println!("Example 4: Async delay");
-    println!("Waiting for 1 second...");
-    delay(1.0).await;
-    println!("Done!");
+    // Create engine (this would fail with a placeholder URL, so just demo the setup)
+    match SyncEngine::new(config) {
+        Ok(engine) => {
+            println!(
+                "\nEngine created with {} provider(s).",
+                engine.providers.len()
+            );
+            // In real usage you'd do:
+            //   engine.pull().await?;   // Pull credentials from repo
+            //   engine.push().await?;   // Push credentials to repo
+            //   engine.sync().await?;   // Bidirectional sync
+            //   engine.watch().await?;  // Watch mode
+        }
+        Err(e) => {
+            eprintln!("Failed to create engine: {e}");
+        }
+    }
 }

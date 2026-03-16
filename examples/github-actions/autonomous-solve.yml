@@ -1,0 +1,65 @@
+# Example GitHub Actions workflow: Autonomous task solving with synced credentials
+#
+# Triggered manually or on issue creation. Spins up a sandbox, syncs credentials,
+# and runs Claude Code in autonomous mode to work on a task.
+#
+# Required repository secrets:
+#   - CREDENTIALS_REPO: URL of the private Git repo containing credentials
+#   - CREDENTIALS_TOKEN: Personal access token with access to the credentials repo
+#
+# Usage:
+#   Copy this file to .github/workflows/autonomous-solve.yml in your project repo.
+
+name: Autonomous Task Solver
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'Task description for Claude Code'
+        required: true
+        type: string
+      branch:
+        description: 'Branch to work on'
+        required: false
+        default: 'main'
+        type: string
+  issues:
+    types: [labeled]
+
+jobs:
+  solve:
+    # Only run on issue label 'ai-solve' or manual trigger
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.label.name, 'ai-solve')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: ghcr.io/link-foundation/sandbox:latest
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || 'main' }}
+
+      - name: Install sync-auth
+        run: cargo install sync-auth
+
+      - name: Sync credentials
+        env:
+          CREDENTIALS_REPO: ${{ secrets.CREDENTIALS_REPO }}
+        run: |
+          sync-auth --repo "$CREDENTIALS_REPO" pull
+          echo "Credentials synced successfully"
+
+      - name: Determine task
+        id: task
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "description=${{ inputs.task }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "description=Solve issue #${{ github.event.issue.number }}: ${{ github.event.issue.title }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run Claude Code
+        run: |
+          claude --print "${{ steps.task.outputs.description }}"
