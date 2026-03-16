@@ -6,7 +6,7 @@ use std::path::PathBuf;
 /// Provider for Qwen Code CLI credentials (officially "Qwen Code", npm: `qwen-code`).
 ///
 /// Qwen Code stores config in `~/.qwen/`.
-/// Key files: `credentials.json` (OAuth tokens), `settings.json` (API keys/settings).
+/// Key files: `oauth_creds.json` (OAuth tokens), `settings.json` (API keys/settings).
 #[derive(Debug, Clone, Default)]
 pub struct QwenCoderProvider;
 
@@ -32,7 +32,7 @@ impl AuthProvider for QwenCoderProvider {
     async fn validate(&self) -> ValidationResult {
         let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("~"));
         let qwen_dir = home.join(".qwen");
-        if qwen_dir.join("credentials.json").exists() || qwen_dir.join("settings.json").exists() {
+        if qwen_dir.join("oauth_creds.json").exists() || qwen_dir.join("settings.json").exists() {
             ValidationResult::Valid
         } else {
             ValidationResult::Missing
